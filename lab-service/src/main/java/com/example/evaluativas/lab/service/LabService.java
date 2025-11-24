@@ -31,6 +31,8 @@ public class LabService {
       l.setLocation("Piso 1");
       l.setCapacity(20);
       l.setActive(true);
+      // Si quieres que la semilla tenga usuario asignado, puedes setearlo acá:
+      // l.setUserId(1L);
       labRepo.save(l);
       log.info("Semilla: creado {}", l.getCode());
     }
@@ -48,20 +50,27 @@ public class LabService {
     labRepo.findByCode(lab.getCode()).ifPresent(x -> {
       throw new IllegalArgumentException("Código de laboratorio ya existe");
     });
+    // lab trae code, name, location, capacity, active y AHORA userId
     return labRepo.save(lab);
   }
 
   public Lab updateLab(Long id, Lab changes) {
     Lab db = getLab(id);
+
     if (!db.getCode().equalsIgnoreCase(changes.getCode())
         && labRepo.existsByCode(changes.getCode())) {
       throw new IllegalArgumentException("Código de laboratorio ya existe");
     }
+
     db.setCode(changes.getCode());
     db.setName(changes.getName());
     db.setLocation(changes.getLocation());
     db.setCapacity(changes.getCapacity());
     db.setActive(changes.getActive());
+
+    // NUEVO: actualizar el USER_ID (responsable)
+    db.setUserId(changes.getUserId());
+
     return labRepo.save(db);
   }
 
@@ -73,6 +82,7 @@ public class LabService {
   }
 
   // ---------- Asignaciones ----------
+  // (esto NO cambia, ya usas userId en LabAssignment)
   public List<LabAssignment> listAssignments(Long labId, Long userId) {
     if (labId != null) return assignRepo.findByLab_Id(labId);
     if (userId != null) return assignRepo.findByUserId(userId);
@@ -125,9 +135,7 @@ public class LabService {
     boolean overlap = assignRepo.existsByLab_IdAndStartTimeLessThanAndEndTimeGreaterThan(
         db.getLab().getId(), db.getEndTime(), db.getStartTime());
     if (overlap) {
-      // Permitir el propio id? Para simplificar, se asume que habrá otra intersección real
-      // En escenarios reales, se hace una query que excluya el id actual.
-      // Aquí lo resolvemos guardando y confiando en que no haya solape idéntico al propio.
+      // comentario que ya tenías
     }
     return assignRepo.save(db);
   }
@@ -138,4 +146,6 @@ public class LabService {
     }
     assignRepo.deleteById(id);
   }
+
+  
 }

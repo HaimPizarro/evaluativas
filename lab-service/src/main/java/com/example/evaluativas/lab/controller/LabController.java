@@ -15,6 +15,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/labs")
+@CrossOrigin(origins = "http://localhost:4200")
 public class LabController {
 
   private static final Logger log = LoggerFactory.getLogger(LabController.class);

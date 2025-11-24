@@ -9,9 +9,6 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
-/**
- * Reglas de negocio de Usuarios con JPA.
- */
 @Service
 public class UserService {
 
@@ -21,15 +18,16 @@ public class UserService {
     public UserService(UserJpaRepository repo) {
         this.repo = repo;
 
-        // Datos semilla opcionales
+        // Usuario ADMIN semilla
         if (repo.findByEmail("admin@demo.cl").isEmpty()) {
             User admin = new User();
             admin.setNombre("Admin");
             admin.setEmail("admin@demo.cl");
             admin.setPassword("1234");
             admin.setActivo(true);
+            admin.setAdmin(true);
             repo.save(admin);
-            log.debug("Usuario semilla creado: {}", admin.getEmail());
+            log.debug("Usuario semilla creado (ADMIN): {}", admin.getEmail());
         }
     }
 
@@ -52,10 +50,18 @@ public class UserService {
 
     public User save(User user) {
         log.debug("Guardando usuario email={}", user.getEmail());
+
+        // Validar email duplicado
         repo.findByEmail(user.getEmail()).ifPresent(u -> {
             log.warn("Intento de registrar email duplicado: {}", user.getEmail());
             throw new IllegalArgumentException("Email ya registrado");
         });
+
+        // ✅ Validación MANUAL de password SOLO para creación
+        if (user.getPassword() == null || user.getPassword().isBlank() || user.getPassword().length() < 4) {
+            throw new IllegalArgumentException("Password debe tener al menos 4 caracteres");
+        }
+
         User saved = repo.save(user);
         log.info("Usuario creado id={} email={}", saved.getId(), saved.getEmail());
         return saved;
@@ -65,12 +71,28 @@ public class UserService {
         log.debug("Actualizando usuario id={}", id);
         User actual = findById(id);
 
+        // Nombre y correo siempre vienen validados por Bean Validation
         actual.setNombre(cambios.getNombre());
         actual.setEmail(cambios.getEmail());
+
+        // ✅ Solo cambiar password si viene NO nula y NO en blanco
         if (cambios.getPassword() != null && !cambios.getPassword().isBlank()) {
+            // acá podrías volver a validar mínimo 4 si quieres seguridad extra
+            if (cambios.getPassword().length() < 4) {
+                throw new IllegalArgumentException("Password debe tener al menos 4 caracteres");
+            }
             actual.setPassword(cambios.getPassword());
         }
-        actual.setActivo(cambios.getActivo() != null ? cambios.getActivo() : actual.getActivo());
+
+        // ACTIVO opcional
+        if (cambios.getActivo() != null) {
+            actual.setActivo(cambios.getActivo());
+        }
+
+        // ADMIN opcional (IS_ADMIN en DB)
+        if (cambios.getAdmin() != null) {
+            actual.setAdmin(cambios.getAdmin());
+        }
 
         User updated = repo.save(actual);
         log.info("Usuario actualizado id={} email={}", updated.getId(), updated.getEmail());
@@ -90,7 +112,25 @@ public class UserService {
     public boolean authenticate(String email, String password) {
         log.debug("Autenticando email={}", email);
         return repo.findByEmail(email)
+            // Verificamos password y que esté ACTIVO
             .map(u -> u.getPassword().equals(password) && Boolean.TRUE.equals(u.getActivo()))
             .orElse(false);
+    }
+
+    public User resetPassword(String email, String newPassword) {
+        log.debug("Reseteando contraseña para email={}", email);
+
+        if (newPassword == null || newPassword.isBlank() || newPassword.length() < 4) {
+            throw new IllegalArgumentException("Password debe tener al menos 4 caracteres");
+        }
+
+        User user = repo.findByEmail(email)
+            .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado email=" + email));
+
+        user.setPassword(newPassword);
+        User updated = repo.save(user);
+
+        log.info("Contraseña actualizada para email={}", updated.getEmail());
+        return updated;
     }
 }
